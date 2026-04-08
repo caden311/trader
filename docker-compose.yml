@@ -1,0 +1,10 @@
+services:
+  trader:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - trader-data:/app/data
+
+volumes:
+  trader-data:

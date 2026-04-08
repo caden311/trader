@@ -1,0 +1,25 @@
+[project]
+name = "trump-trader"
+version = "0.1.0"
+description = "Automated trading bot that analyzes Trump's Truth Social posts for market impact"
+requires-python = ">=3.10"
+dependencies = [
+    "alpaca-py>=0.30.0",
+    "anthropic>=0.40.0",
+    "requests>=2.31.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "structlog>=24.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["config*", "core*", "models*", "store*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
