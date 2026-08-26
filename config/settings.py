@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     max_single_short_pct: float = 0.03
     min_equity_floor: float = 1000.0
 
+    # Gap protection
+    gap_protection_enabled: bool = True
+    gap_protection_multiplier: float = 1.5
+
     # Polling
     poll_interval_seconds: int = 30
 

@@ -60,11 +60,20 @@ class Orchestrator:
         if market_open:
             self._drain_pending_queue()
 
+        # 4. Gap protection: check if any positions have blown past their stops
+        if market_open and settings.gap_protection_enabled:
+            try:
+                closed = self.executor.check_gap_positions(self.db)
+                if closed:
+                    logger.warning("gap_protection_closed", symbols=closed)
+            except Exception:
+                logger.exception("gap_protection_error")
+
         if not new_posts:
             logger.debug("no_new_posts")
             return
 
-        # 4. Analyze posts (batch if multiple arrived at once)
+        # 5. Analyze posts (batch if multiple arrived at once)
         if len(new_posts) > 1:
             analysis = self.analyzer.analyze_batch(new_posts)
             post_id = new_posts[0].id
@@ -75,7 +84,7 @@ class Orchestrator:
         # Save analysis
         self.db.save_analysis(post_id, analysis)
 
-        # 5. Queue for open if market is closed, otherwise trade now
+        # 6. Queue for open if market is closed, otherwise trade now
         if not market_open and not settings.use_extended_hours:
             logger.info(
                 "market_closed_trade_queued",
@@ -87,7 +96,7 @@ class Orchestrator:
             self.db.queue_pending_analysis(post_id)
             return
 
-        # 6. Risk check + execute
+        # 7. Risk check + execute
         self._evaluate_and_execute(post_id, analysis)
 
     def _drain_pending_queue(self) -> None:

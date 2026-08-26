@@ -63,9 +63,15 @@ class Database:
                 entry_price REAL,
                 analysis_confidence REAL NOT NULL,
                 analysis_sentiment REAL NOT NULL,
+                stop_loss_pct REAL DEFAULT 0,
                 FOREIGN KEY (post_id) REFERENCES seen_posts(id)
             );
         """)
+        # Migrate existing databases
+        try:
+            self.conn.execute("ALTER TABLE trades ADD COLUMN stop_loss_pct REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         self.conn.commit()
 
     def has_seen_post(self, post_id: str) -> bool:
@@ -114,8 +120,9 @@ class Database:
         self.conn.execute(
             """INSERT INTO trades
                (post_id, symbol, side, quantity, order_id, status,
-                executed_at, entry_price, analysis_confidence, analysis_sentiment)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                executed_at, entry_price, analysis_confidence, analysis_sentiment,
+                stop_loss_pct)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 trade.post_id,
                 trade.symbol,
@@ -127,9 +134,18 @@ class Database:
                 trade.entry_price,
                 trade.analysis_confidence,
                 trade.analysis_sentiment,
+                trade.stop_loss_pct,
             ),
         )
         self.conn.commit()
+
+    def get_trade_by_symbol(self, symbol: str) -> dict | None:
+        """Return the most recent trade for a given symbol."""
+        row = self.conn.execute(
+            "SELECT * FROM trades WHERE symbol = ? ORDER BY executed_at DESC LIMIT 1",
+            (symbol,),
+        ).fetchone()
+        return dict(row) if row else None
 
     def queue_pending_analysis(self, post_id: str) -> None:
         self.conn.execute(

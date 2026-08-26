@@ -146,6 +146,7 @@ class TradeExecutor:
                 entry_price=price,
                 analysis_confidence=0.0,  # Will be set by orchestrator
                 analysis_sentiment=0.0,
+                stop_loss_pct=intent.stop_loss_pct,
             )
 
             logger.info(
@@ -164,6 +165,67 @@ class TradeExecutor:
                 error=str(e),
             )
             return None
+
+    def check_gap_positions(self, db) -> list[str]:
+        """Check open positions for gap-through-stop scenarios. Returns list of closed symbols."""
+        if not settings.gap_protection_enabled:
+            return []
+
+        positions = self.client.get_all_positions()
+        if not positions:
+            return []
+
+        closed = []
+        multiplier = settings.gap_protection_multiplier
+
+        for position in positions:
+            symbol = position.symbol
+            current_price = float(position.current_price)
+            qty = float(position.qty)
+            is_long = qty > 0
+
+            # Look up the trade record to get entry_price and stop_loss_pct
+            trade = db.get_trade_by_symbol(symbol)
+            if trade and trade.get("entry_price") and trade.get("stop_loss_pct"):
+                entry_price = trade["entry_price"]
+                stop_pct = trade["stop_loss_pct"]
+            else:
+                # Fallback to position avg_entry_price and default stop percentages
+                entry_price = float(position.avg_entry_price)
+                stop_pct = (
+                    settings.long_stop_loss_pct if is_long
+                    else settings.short_stop_loss_pct
+                )
+
+            gap_threshold = stop_pct * multiplier
+
+            should_close = False
+            if is_long and current_price <= entry_price * (1 - gap_threshold):
+                should_close = True
+            elif not is_long and current_price >= entry_price * (1 + gap_threshold):
+                should_close = True
+
+            if should_close:
+                try:
+                    self.client.close_position(symbol_or_asset_id=symbol)
+                    closed.append(symbol)
+                    logger.warning(
+                        "gap_protection_closed_position",
+                        symbol=symbol,
+                        side="long" if is_long else "short",
+                        entry_price=entry_price,
+                        current_price=current_price,
+                        stop_loss_pct=stop_pct,
+                        gap_threshold=gap_threshold,
+                    )
+                except Exception as e:
+                    logger.error(
+                        "gap_protection_close_failed",
+                        symbol=symbol,
+                        error=str(e),
+                    )
+
+        return closed
 
     def _get_latest_price(self, symbol: str) -> float:
         """Get the latest trade price for a symbol."""

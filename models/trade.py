@@ -37,3 +37,4 @@ class TradeRecord(BaseModel):
     entry_price: float | None = None
     analysis_confidence: float
     analysis_sentiment: float
+    stop_loss_pct: float = 0.0
